@@ -963,7 +963,7 @@ Rec <- ROCWithCI(train_probsCalc)
 DervTest <- ROCWithCI(train_probsTestCalc)
 WholeDerivation <- ROCWithCI(train_probsDervWholeCalc)
 
-pdf(paste0(IncludeFigHere, "/AUCCoolTogether.pdf"), 15, 5)
+pdf(paste0(IncludeFigHere, "/AUCTogether.pdf"), 15, 5)
 print(Validation + Derivation + Rec + DervTest + WholeDerivation )
 dev.off()
 
