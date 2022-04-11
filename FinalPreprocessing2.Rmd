@@ -1,0 +1,472 @@
+---
+title: "Preprocessing - Missing Values"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#registerDoSEQ()
+#https://recipes.tidymodels.org/reference/step_dummy.html
+```
+
+```{r}
+set.seed(132)
+```
+
+
+```{r}
+library(dplyr)
+library(tidyverse)
+#library(kableExtra)
+library(data.table)
+require(gridExtra)
+require(grid)
+require(readr)
+library("naniar")
+library(visdat)
+library(ggplot2)
+library(ggpubr)
+library(tidylog)
+```
+
+
+```{r}
+cscdata_development <- readRDS("/rds/projects/g/gkoutosg-variant-prediction/VictorSaisa/FinalCode/DataMarch/cscdata_development.rds") #included 5 moribund
+#cscdata_development2 <- readRDS("/rds/projects/g/gkoutosg-variant-prediction/Laura/Magda/JamesCodeFuns/cscdata_development.rds") #instead of NA had missing 
+
+cscdata_development[cscdata_development == "Missing"] <- NA #both in asa and bupagrade
+
+cscdata_development$compartment = as.factor(cscdata_development$cancer_location.factor)
+cscdata_development$compartment %>% 
+  fct_collapse("Abdominopelvic" = c("Colon", "Rectal", "Gastric", "Liver", "Pancreatic", "Soft-tissue sarcoma", 
+                                          "Kidney or upper tract urothelial",
+                                          "Bladder", "Prostate", "Gynaecological")) %>% 
+  fct_collapse("Head & Neck" = c("Head or neck")) %>% 
+  fct_collapse("Thoracic" = c("Lung", "Oesophageal")) %>% 
+  fct_collapse("Limb" = c("Bony sarcoma")) %>% 
+  fct_collapse("Other" = c("Intracranial tumour (benign or malignant)", "Breast")) -> cscdata_development$compartment
+table(cscdata_development$compartment)
+
+cscdata_development$asa.factor %>% 
+  fct_collapse("Grade 1" = c("1 - a normal healthy patient")) %>% 
+  fct_collapse("Grade 2" = c("2 - a patient with mild systemic disease")) %>% 
+  fct_collapse("Grade 3" = c("3 - a patient with severe systemic disease")) %>% 
+  fct_collapse("Grade 4+" = c("4 - a patient with severe systemic disease that is a constant threat to life", "5 - a moribund patient who is not expected to survive without the operation")) -> cscdata_development$asa.factor
+
+
+cscdata_development$age.factor <-  cscdata_development$age.factor %>%
+  fct_collapse("18-29 years" = c("17-19 years", "20-29 years"))  
+
+  ################ Preprocessing new data
+
+
+dataA <- cscdata_development
+
+dataA$prerespiratory <- as.factor(dataA$prerespiratory)
+dataA$bupagrade <- as.factor(dataA$bupagrade)
+dataA <- (droplevels.data.frame(dataA))
+
+dataA$rcri <- as.factor(dataA$rcri)
+
+dataA <- dataA %>%
+  mutate(
+    resp.comps = recode(resp.comps,
+                        "PPC-" = "Negative",
+                        "PPC+" = "Positive"
+    )
+    
+  ) %>%
+  dplyr::rename(Label = resp.comps) %>%
+  dplyr::rename(
+    #advanceddisease = advanced_disease, #dropped
+    #prevcovidfactor = prev_covid.factor,
+    incomegroup = income_group, 
+    postdiagnosisyn = post_diagnosis_yn, 
+    anaesthetictype = anaesthetic_type, 
+    age = age.factor, 
+    sex = sex.factor, 
+    asa = asa.factor, 
+    comrisk = comrisk.group) 
+
+
+#key!!! Some labels had NA values
+#dataA <- dataA %>% 
+#  drop_na(Label)
+
+Pcscdata_development <- dataA %>%
+  select(-c( mortyn))
+
+
+Pcscdata_development <- Pcscdata_development %>% 
+  select(-cancer_location.factor) %>%
+  mutate(Type = "Development", 
+         patienttype = "Cancer")
+
+```
+
+
+```{r}
+swdata_validation <- readRDS("/rds/projects/g/gkoutosg-variant-prediction/VictorSaisa/FinalCode/DataMarch/swdata_validation.rds")
+swdata_validation[swdata_validation == "Missing"] <- NA #both in asa and bupagrade
+
+dataA <- swdata_validation
+
+dataA$prerespiratory <- as.factor(dataA$prerespiratory)
+dataA$bupagrade <- as.factor(dataA$bupagrade)
+dataA <- (droplevels.data.frame(dataA))
+
+dataA$rcri <- as.factor(dataA$rcri)
+
+dataA <- dataA %>%
+  mutate(
+    resp.comps = recode(resp.comps,
+                        "PPC-" = "Negative",
+                        "PPC+" = "Positive"
+    )
+    
+  ) %>%
+  dplyr::rename(Label = resp.comps) %>%
+  dplyr::rename(
+    #advanceddisease = advanced_disease, #dropped
+    #prevcovidfactor = prev_covid.factor,
+    incomegroup = income_group, 
+    postdiagnosisyn = post_diagnosis_yn, 
+    anaesthetictype = anaesthetic_type, 
+    age = age.factor, 
+    sex = sex.factor, 
+    asa = asa.factor, 
+    comrisk = comrisk.group, 
+    patienttype = indication_2l)
+
+#key!!! Some labels had NA values
+#dataA <- dataA %>% 
+#  drop_na(Label)
+
+Pswdata_validation <- dataA
+
+Pswdata_validation <- Pswdata_validation %>%
+  mutate(Type = "Validation")
+```
+
+
+```{r}
+
+TotalDataset <- rbind(Pcscdata_development, Pswdata_validation)
+
+TotalDataset <- TotalDataset %>% 
+  select(-c(iso2, do_operation.week2, postdiagnosisyn)) %>% 
+  mutate(rcri = recode(rcri, '4'= "4+", '5' = "4+", '6' = "4+")) #%>%
+  #drop_na() %>%
+  #filter(asa != "Missing") %>%
+  #filter(bupagrade != "Missing") #we also have NAs
+
+```
+
+
+```{r}
+recon <- readRDS("/rds/projects/g/gkoutosg-variant-prediction/VictorSaisa/FinalCode/DataMarch/recon_validation.rds") 
+#recon2 <- readRDS("/rds/projects/g/gkoutosg-variant-prediction/Laura/Magda/JamesCodeFuns/recon.rds")
+
+recon[recon == "Missing"] <- NA 
+
+recon$compartment <- recon$compartment %>% 
+  replace_na('Abdominopelvic')
+
+dataA <- recon
+
+dataA$prerespiratory <- as.factor(dataA$prerespiratory)
+dataA$bupagrade <- as.factor(dataA$bupagrade)
+dataA <- (droplevels.data.frame(dataA))
+
+dataA$rcri <- as.factor(dataA$rcri)
+
+dataA <- dataA %>%
+  mutate(
+    resp.comps = recode(resp.comps,
+                        "PPC-" = "Negative",
+                        "PPC+" = "Positive"  #coded it wrong in the dataset #corrected 26th May
+    )
+    
+  ) %>%
+  dplyr::rename(Label = resp.comps) %>%
+  dplyr::rename(
+    #advanceddisease = advanced_disease, #dropped
+    #prevcovidfactor = prev_covid.factor,
+    incomegroup = income_group, 
+    postdiagnosisyn = post_diagnosis_yn, 
+    anaesthetictype = anaesthetic_type, 
+    age = age.factor, 
+    sex = sex.factor, 
+    asa = asa.factor, 
+    comrisk = comrisk.group,
+    patienttype = indication_2l)
+
+#key!!! Some labels had NA values
+#dataA <- dataA %>% 
+#  drop_na(Label)
+
+Pcscdata_recon <- dataA %>%
+     dplyr::select(-c(iso2, do_operation.week2, postdiagnosisyn, cancer_location.factor, com_mort_yn, incision_3l)) %>% 
+     mutate(Type = "recon") 
+      
+```
+
+
+```{r}
+
+#also change 90+/ rcir to 3+ and asa grade to 4+
+
+TotalDatasetFinal <-  rbind(TotalDataset, Pcscdata_recon) %>%
+  #filter(asa != "Missing") %>%
+  #filter(bupagrade != "Missing")  %>% #tackled through NAs
+  rename("PulmComp" = "Label", 
+         "Label" = "Type") %>%
+  mutate(rcri = recode(rcri, '4'= "3+", '3' = "3+", '3 or more' = "3+", "4+" = "3+")) %>%
+  mutate(asa = recode(asa, 'Grade 4'= "Grade 4+", 'Grade 5' = "Grade 4+"))
+
+TotalDatasetFinalModeling <- TotalDatasetFinal %>%
+  rename("Type" = "Label", 
+         "Label" = "PulmComp") 
+
+#TotalDatasetFinalModeling2 <- TotalDatasetFinalModeling %>%
+#  mutate(IncomeComRisk = paste0(incomegroup,"_", comrisk))
+
+#write.csv(TotalDatasetFinalModeling2,paste0(IncludeFigHere,"/CombinedThreeFinalDatasetReconInElectiveLabelChangeNewVars.c#sv"))
+```
+
+
+
+Plots and tables (change names)
+
+```{r}
+
+FinalDataChar <- TotalDatasetFinalModeling %>%
+  select_if(~ !is.numeric(.)) %>%
+  mutate_if(~ !is.character(.), as.character) %>%
+  dplyr::rename(
+    "Age" = "age" ,
+    "Sex" = "sex",
+    "ASA_grade" = "asa",
+    "RCRI" = "rcri",
+    "Preexisting_respiratory_disease" = "prerespiratory",
+    "BUPA_operation_grade" = "bupagrade",
+    "Current_smoker" = "currentsmoker",
+    "Anaesthetic_type" = "anaesthetictype",
+    "Preoperative_SARSCoV2_test" = "swabtest",
+    "Community_SARSCoV2_risk" = "comrisk",
+    "Hospital_type" = "covid19free" ,
+    "Country_income" = "incomegroup",
+    "Compartment" =  "compartment",
+    "Indication" = "patienttype", 
+    "Pulmonary_complications" = "Label" , 
+    "Death" = "mortality_yn"
+    #"Country_income_SARSCoV2_risk" = "IncomeComRisk"
+  ) %>% 
+  mutate(
+    Anaesthetic_type= recode(Anaesthetic_type,  
+                             "General anaesthetic" = "General",
+                             "Regional/local anaesthetic" = "Regional/local"
+    )) %>%
+  mutate(Country_income_SARSCoV2_risk = paste0(Country_income,"_",Community_SARSCoV2_risk))
+
+### reorder factors? 
+
+
+FinalDataChar$Type <- recode(FinalDataChar$Type,  Validation = "Derivation (SW_data)", recon = "Validation 2 (Recon)" ,Development = "Validation 1 (CSC_Data)",.default = NA_character_)
+```
+
+
+Missing  values 
+
+```{r}
+
+Plot1 <- list()
+Plot2 <- list()
+Data <- list()
+
+
+for (i in levels(as.factor(FinalDataChar$Type))){
+  
+  print(i)
+  
+  MissDat <- filter(FinalDataChar, Type == i) # & Pulmonary_complications == "Positive"
+
+Plot2[[i]] <- gg_miss_upset(MissDat, nsets = 6, nintersects = 10)
+
+pdf(paste0(IncludeFigHere,"/Missing: ", i, ".pdf"), 5,4)
+
+print(vis_miss(MissDat, sort_miss = TRUE,  warn_large_data = FALSE) + theme(text = element_text(size=8),
+        axis.text.x = element_text(angle=90)) +  
+  labs(title = paste0("Figure 1 - missingness of ", i, " data")))
+print(Plot2[[i]])
+
+dev.off()
+
+Data[[i]] <- MissDat %>%
+#group_by(Pulmonary_complications) %>%
+miss_var_summary() #%>%
+  #filter(n_miss != 0)
+  
+
+#MissDat %>%
+#  group_by(Pulmonary_complications) %>%
+#  miss_var_summary(add_cumsum = TRUE)
+
+
+}
+
+Table <- Data %>% 
+  bind_rows(.id = "Datasets") %>%
+  mutate_at(vars(pct_miss), round,2)
+
+Table$export <- with(Table, sprintf("%i (%.1f%%)", n_miss, pct_miss))
+
+output <- dcast(variable~Datasets, value.var="export", data=Table, fill="missing") #use drop=F to prevent silent missings 
+
+myt <- ttheme_default(
+  # Use hjust and x to left justify the text
+  # Alternate the row fill colours
+  core = list(
+    bg_params=list(fill=c("transparent", "light blue"))),
+  
+  # Change column header to white text and red background
+  colhead = list(fg_params=list(col="white"),
+                 bg_params=list(fill="black"))
+)
+
+
+grid.newpage()
+
+pdf(paste0(IncludeFigHere, "/MissingTable.pdf"), 17,21)
+#pdf("TransportabilityTable.pdf", 17,21)
+grid.table(output,theme=myt, rows=NULL)
+dev.off()
+
+write.csv(output, paste0(IncludeFigHere,"/MissingTable.csv"))
+
+```
+
+Plot 
+
+```{r}
+
+
+Model1aPivot <- FinalDataChar %>%
+  dplyr::rename(
+    "Label" = "Pulmonary_complications" ) %>%
+  #drop_na(-Death) %>%
+  filter(is.na(Death)) %>%#check if missing death share patterns
+  pivot_longer(-c(Label,Type), names_to = "Features", values_to = "Value") %>%
+  mutate(NewLabel = paste0(Type,"_", Label))
+
+CharPlots1 <- Model1aPivot %>%
+  group_by(Features,Type) %>%
+  dplyr::count(Value, Label,Type,  sort = TRUE) %>%
+  ungroup() %>%
+  group_by(Features, Type, Value) %>%
+  mutate(Sum = sum(n)) %>%
+  ungroup() %>%
+  #mutate(Value = fct_reorder(Value, n, sum)) %>%
+  ggplot(aes(n, Value , fill = Type, alpha= Label)) +
+  facet_wrap(~Features, scales = "free") +
+  scale_alpha_manual(values = c("Negative"=0.5, "Positive"=1)) +
+  geom_col(position = "fill") +
+  #geom_text(aes(label = Sum), position = position_dodge(width = 0.5)) +
+  labs( x = "Frequency of Patients", y = "Levels of Feature")
+
+
+
+
+pdf(paste0(IncludeFigHere,"/SummaryFig.pdf"), 20, 10)
+
+print(CharPlots1 + theme_bw())
+#print(Plot1b(dataA1Labs)) #All factors
+
+dev.off()
+
+
+
+```
+
+Complete case analysis
+
+```{r}
+
+table(FinalDataChar$Type, FinalDataChar$Pulmonary_complications)
+
+gg <- FinalDataChar %>% 
+  filter(Type == "Validation 2 (Recon)") %>% 
+  drop_na(-Death)
+
+gg2 <- FinalDataChar %>% 
+  drop_na(-Death) %>%
+  filter(Type == "Validation 2 (Recon)")
+
+aa <- FinalDataChar %>%
+    dplyr::rename(
+         "Label" = "Pulmonary_complications" ) %>%
+     drop_na(-Death) 
+
+gg3 <- aa %>% 
+  filter(Type == "Validation 2 (Recon)")
+
+table(aa$Type, aa$Label)
+
+aa$Type <- recode(aa$Type,   "Derivation (SW_data)" = "Validation",   "Validation 2 (Recon)" = "recon", "Validation 1 (CSC_Data)" = "Development",.default = NA_character_)
+
+write.csv(aa,paste0(IncludeFigHere,"/CombinedThreeFinalDatasetReconInElectiveLabelChangeNewVars.csv"))
+```
+
+```{r}
+#Transortability? 
+
+#https://stackoverflow.com/questions/34587317/using-dplyr-to-create-summary-proportion-table-with-several-categorical-fa#ctor-v
+
+#aa <- read.csv("Corrections_20220113_0100/CombinedThreeFinalDatasetReconInElectiveLabelChangeNewVars.csv") %>% 
+#  select(-X)
+
+library(tidyr)
+library(dplyr)
+
+aa1 <- aa %>%
+  pivot_longer(-c(Type), names_to = "Features", values_to = "Value") %>%
+  group_by(Type, Features, Value) %>%
+  summarise (n = n()) %>%
+  mutate(freq = n / sum(n))
+
+aa1$export <- with(aa1, sprintf("%i (%.1f%%)", n, freq*100))
+
+#reshape again
+output <- dcast(Features+Value~Type, value.var="export", data=aa1, fill="missing") #use drop=F to prevent silent missings 
+#'silent missings'
+output$Features <- as.character(output$Features)
+#make 'empty lines' 
+empties <- data.frame(Features=unique(output$Features), stringsAsFactors=F)
+empties[,colnames(output)[-1]] <- ""
+
+#bind them together
+output2 <- rbind(empties,output)
+output2 <- output2[order(output2$Features,output2$Value),] %>%
+  select("Features", "Value", "Validation",  "Development", "recon")
+
+#optional: 'remove' variable if value present
+
+output2$Features[output2$Value!=""] <- ""
+
+names(output2) <- c("Features", "Levels", "Derivation:SurgWeek" ,"Validation 1:CovidSurg-Cancer","Validation 2:Recon")
+
+saveRDS(output2, paste0(IncludeFigHere,"/TransportabilityTable.rds"))
+write_csv(output2, paste0(IncludeFigHere,"/TransportabilityTable.csv"))
+
+
+
+grid.newpage()
+pdf(paste0(IncludeFigHere, "/TransportabilityTable.pdf"), 17,21)
+#pdf("TransportabilityTable.pdf", 17,21)
+grid.table(output2,theme=myt, rows=NULL)
+dev.off()
+
+```
+
+
