@@ -1,0 +1,16 @@
++--------------------------------------------------------------------------+
+| Job on the BlueBEAR cluster:
+| Starting at Mon Apr 11 10:31:07 2022 for lxb732(601863)
+| Identity jobid 45149061 jobname Ice
+| Running against project gkoutosg-variant-prediction and in partition icelake-castles
+| Requested cpu=70,mem=100G,node=1,billing=70 - 06:00:00 walltime
+| Assigned to nodes bear-pg0104u06a
+| Command /rds/projects/g/gkoutosg-variant-prediction/VictorSaisa/FinalCode/March11_PulmonaryComplications.sh
+| WorkDir /rds/projects/g/gkoutosg-variant-prediction/VictorSaisa/FinalCode
++--------------------------------------------------------------------------+
++--------------------------------------------------------------------------+
+| Finished at Mon Apr 11 10:55:43 2022 for lxb732(601863) on the BlueBEAR Cluster
+| Required (03:11:47 cputime, 47980865K memory used) - 00:24:36 walltime
+| JobState COMPLETING - Reason None
+| Exitcode 0:0
++--------------------------------------------------------------------------+
