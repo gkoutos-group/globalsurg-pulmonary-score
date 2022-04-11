@@ -1,5 +1,5 @@
 # globalsurg-pulmonary-score
 The computations described in this paper were performed using the University of Birmingham's BlueBEAR HPC service, which provides a High Performance Computing service to the University's research community. See http://www.birmingham.ac.uk/bear for more details. More sepcifically we used CaStLeS (Compute and Storage for the Life Sciences)resources, a collection of compute and storage resources for supporting research at the University of Birmingham. 
 The main script is March11_PulmonaryComplications.R - where detailed instructions acn be found on the actions taken. From it, at the start, FinalPreprocessing2.Rmd is sourced where EDA and missing value analysis is performed and with which the final complete case analaysis data is created. At the end, FinalExtraApps.R is sourced, and the files needed to support our shiny app ( https://surgicalrisk.app )are created. All the raw images and tables extacted from the analyisis have been included in folder Results. No patient data is included due to privacy issues. 
-Also the output script from our analysis aswell as our session info are uploaded. 
+Also the output script from our analysis aswell as our session information are uploaded. 
 For any queries plase contact lxb732@student.bham.ac.uk
